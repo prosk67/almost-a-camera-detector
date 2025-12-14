@@ -1,5 +1,5 @@
-// IR Camera Detector - Optimized for Your Sensors
-// Based on actual sensor behavior analysis
+// IR Camera Detector - Complete Working Version
+// Detects IR light from security cameras
 
 // Sensor pins
 #define CNY70_PIN 32
@@ -9,24 +9,23 @@
 #define LED_PIN 2
 #define BUZZER_PIN 19
 
-// Optimized thresholds based on your readings
-#define IR_RECEIVER_THRESHOLD 400   // IR drops by ~350-550 when detecting
-#define PHOTODIODE_THRESHOLD 600    // Photodiode analog deviation
-#define CNY70_THRESHOLD 3000        // Increased - CNY70 too unstable for handheld
-#define CNY70_ENABLED true          // Re-enable CNY70 for camera detection
+// Optimized thresholds
+#define IR_RECEIVER_THRESHOLD 400
+#define PHOTODIODE_THRESHOLD 600
+#define CNY70_THRESHOLD 3000
+#define CNY70_ENABLED true
 #define SAMPLES 15
 
 // Detection requirements
-#define CONSECUTIVE_NEEDED 2        // Need 2 stable readings
-#define DETECTION_CONFIDENCE 1      // Need at least 1 sensor (CNY70 is most reliable)
-#define IR_RECEIVER_WORKING false   // Set based on calibration
+#define CONSECUTIVE_NEEDED 2
+#define DETECTION_CONFIDENCE 1
 
 int consecutiveDetections = 0;
 int cny70_baseline = 0;
 int ir_receiver_baseline = 0;
 int photodiode_baseline = 0;
 
-// Detection history for better accuracy
+// Detection history
 int detectionHistory[5] = {0, 0, 0, 0, 0};
 int historyIndex = 0;
 
@@ -60,49 +59,41 @@ void loop() {
   int ir_deviation = abs(irReceiver - ir_receiver_baseline);
   int photo_deviation = abs(photodiodeAnalog - photodiode_baseline);
   
-  // Smart detection logic based on YOUR sensor patterns
+  // Detection logic
   bool cny70_detect = false;
   if (CNY70_ENABLED) {
-    // CNY70 goes LOW when IR hits it
     cny70_detect = (cny70 < 1000 && cny70_deviation > CNY70_THRESHOLD);
   }
   
-  // IR Receiver: Check for ANY significant change (some receivers are inverted)
   bool ir_receiver_detect = false;
   if (ir_receiver_baseline < 4000) {
-    // Normal mode: drops when detecting
     ir_receiver_detect = (irReceiver < (ir_receiver_baseline - IR_RECEIVER_THRESHOLD));
-  } else {
-    // Stuck at max mode: disable this sensor
-    ir_receiver_detect = false;
   }
   
-  // Photodiode Analog: goes high when detecting OR drops low (depends on module)
   bool photo_analog_detect = (photodiodeAnalog > (photodiode_baseline + PHOTODIODE_THRESHOLD)) ||
                              (photodiodeAnalog < (photodiode_baseline - PHOTODIODE_THRESHOLD));
   
-  // Photodiode Digital: goes ACTIVE (LOW) when detecting
   bool photo_digital_detect = (photodiodeDigital == LOW);
   
-  // Count active detections
+  // Count detections
   int detectionCount = 0;
   if (cny70_detect) detectionCount++;
   if (ir_receiver_detect) detectionCount++;
   if (photo_analog_detect) detectionCount++;
   if (photo_digital_detect) detectionCount++;
   
-  // Update detection history
+  // Update history
   detectionHistory[historyIndex] = detectionCount;
   historyIndex = (historyIndex + 1) % 5;
   
-  // Calculate average recent detections
+  // Calculate average
   int recentDetections = 0;
   for(int i = 0; i < 5; i++) {
     recentDetections += detectionHistory[i];
   }
   float avgDetections = recentDetections / 5.0;
   
-  // Display readings (cleaner format)
+  // Display readings
   Serial.println("\n┌─────────────────────────────────────┐");
   Serial.println("│        SENSOR STATUS                │");
   Serial.println("├─────────────────────────────────────┤");
@@ -146,7 +137,7 @@ void loop() {
   
   Serial.println("├─────────────────────────────────────┤");
   
-  // Detection decision with confidence
+  // Update streak
   if (detectionCount >= DETECTION_CONFIDENCE) {
     consecutiveDetections++;
   } else {
@@ -157,7 +148,7 @@ void loop() {
   Serial.print(detectionCount);
   Serial.print("/");
   int totalSensors = (CNY70_ENABLED ? 1 : 0) + 
-                     (ir_receiver_baseline < 4000 ? 1 : 0) + 2; // Always count photodiode
+                     (ir_receiver_baseline < 4000 ? 1 : 0) + 2;
   Serial.print(totalSensors);
   Serial.print(" │ Streak: ");
   Serial.print(consecutiveDetections);
@@ -168,33 +159,40 @@ void loop() {
   Serial.println("    │");
   Serial.println("└─────────────────────────────────────┘");
   
-  // Alert based on detection confidence
+  // Alert logic with buzzer
   if (consecutiveDetections >= CONSECUTIVE_NEEDED && avgDetections >= 0.8) {
     Serial.println("\n🔴 CAMERA DETECTED! 🔴");
     Serial.println("▶ IR source confirmed at this location");
     digitalWrite(LED_PIN, HIGH);
     
-    // Victory beep pattern
-    tone(BUZZER_PIN, 1000, 100);
-    delay(100);
-    tone(BUZZER_PIN, 1200, 100);
-    delay(100);
-    tone(BUZZER_PIN, 1500, 200);
+    // 3 ascending beeps - CAMERA FOUND ALERT
+    tone(BUZZER_PIN, 1000);
+    delay(150);
+    noTone(BUZZER_PIN);
+    delay(50);
+    tone(BUZZER_PIN, 1200);
+    delay(150);
+    noTone(BUZZER_PIN);
+    delay(50);
+    tone(BUZZER_PIN, 1500);
+    delay(300);
+    noTone(BUZZER_PIN);
     
   } else if (detectionCount >= 1) {
     Serial.println("\n🟡 Possible IR Source");
     Serial.println("▶ Keep scanning this area...");
+    
+    // Single short beep for possible detection
+    tone(BUZZER_PIN, 800);
     digitalWrite(LED_PIN, HIGH);
     delay(100);
-    digitalWrite(LED_PIN, LOW);
-    
-  } else if (detectionCount == 1) {
-    Serial.println("\n⚪ Weak Signal");
+    noTone(BUZZER_PIN);
     digitalWrite(LED_PIN, LOW);
     
   } else {
     Serial.println("\n🟢 Normal - No IR detected");
     digitalWrite(LED_PIN, LOW);
+    noTone(BUZZER_PIN);
   }
   
   delay(200);
